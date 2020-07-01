@@ -1,5 +1,3 @@
-INTRODUCTION
-============
 ucore os labs was used as OS Experiments in OS Course Of Dept. of Computer Science & Technology, Tsinghua University.
 
 - [ucore os lab docs](https://chyyuu.gitbooks.io/ucore_os_docs/content/)
@@ -144,4 +142,6 @@ The codes in the files that constitute OS/161 are written by David A. Holland.
 The codes in the files that constitute ucore are Copyright (2010-Current) Yu Chen, Naizheng Wang, Yong Xiang and uses GPL License.
 
 The documents in the files that constitute ucore are Copyright (2010-Current) Yu Chen, Yong Xiang and uses Creative Commons Attribution/Share-Alike (CC-BY-SA) License. 
+
+=======
 
