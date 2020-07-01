@@ -32,6 +32,7 @@ static struct pseudodesc idt_pd = {
 };
 
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
+extern uintptr_t __vectors[];
 void
 idt_init(void) {
      /* LAB1 YOUR CODE : STEP 2 */
@@ -46,6 +47,16 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
+    
+    for(int i = 0;i < sizeof(idt)/sizeof(struct gatedesc);i++){
+        SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+    }
+
+    // 将用户态调用SWITCH_TOK中断的权限打开
+    SETGATE(idt[T_SWITCH_TOK], 1, KERNEL_CS, __vectors[T_SWITCH_TOK], 3);
+
+    lidt(&idt_pd);
+
 }
 
 static const char *
@@ -147,6 +158,10 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
+        ticks += 1;
+        if (ticks % TICK_NUM == 0) {
+            print_ticks();
+        }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
@@ -158,8 +173,35 @@ trap_dispatch(struct trapframe *tf) {
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
+        if(tf->tf_cs != USER_CS){
+            //创建一个trapframe来保存进行中断处理的信息
+            struct trapframe usr2ker;
+            usr2ker = *tf;
+            usr2ker.tf_cs = USER_CS;
+            usr2ker.tf_ds = usr2ker.tf_es = usr2ker.tf_ss = USER_DS;
+            usr2ker.tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8;
+
+            //修改IO权限位
+            usr2ker.tf_eflags |= FL_IOPL_MASK;
+
+            //压入栈中
+            *((uint32_t*)tf - 1) = (uint32_t)&usr2ker;
+
+        }
+        break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        if(tf->tf_cs != KERNEL_CS){
+            tf->tf_cs = KERNEL_CS;
+            tf->tf_ds = tf->tf_es = KERNEL_DS;
+            tf->tf_eflags &= ~FL_IOPL_MASK;
+
+            //下面两步是将设置好寄存器值的trapframe压栈，进行中断处理程序
+            struct trapframe* ker2usr = (struct trapframe*)(tf->tf_esp - (sizeof(struct trapframe) - 8));
+            memmove(ker2usr, tf, sizeof(struct trapframe) - 8);
+            *((uint32_t*)tf - 1) = (uint32_t)ker2usr;
+
+        }
+        // panic("T_SWITCH_** ??\n");
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:

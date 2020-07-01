@@ -302,5 +302,16 @@ print_stackframe(void) {
       *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
       *                   the calling funciton's ebp = ss:[ebp]
       */
+    uint32_t t_ebp = read_ebp();                                // 读取ebp寄存器
+    uint32_t t_eip = read_eip();                                // 读取eip寄存器，记录的是当前指令的PC值
+    for(int i = 0;i < STACKFRAME_DEPTH && t_ebp != 0;i++){      
+        cprintf("ebp:0x%08x eip:0x%08x", t_ebp, t_eip);         // 打印寄存器ebp和eip的值
+        uint32_t* first_parameter = (uint32_t*)(t_ebp + 8);     // 转化为地址，地址ebp+8指向第一个参数的值
+        cprintf("args:0x%08x 0x%08x 0x%08x 0x%08x", first_parameter[0], first_parameter[1], first_parameter[2], first_parameter[3]); //打印出四个参数值
+        cprintf("\n");
+        print_debuginfo(t_eip-1);
+        t_eip = *((uint32_t*)(t_ebp + 4));                        // 将eip寄存器的值设置为返回地址，也就是下一条指令的地址处，位置在ebp+4
+        t_ebp = *((uint32_t*)t_ebp);
+    }
 }
 

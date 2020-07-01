@@ -115,8 +115,8 @@ default_init_memmap(struct Page *base, size_t n) {
     }
     base->property = n;
     SetPageProperty(base);
+    list_add_before(&free_list, &(base->page_link));
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
 }
 
 static struct Page *
@@ -135,14 +135,17 @@ default_alloc_pages(size_t n) {
         }
     }
     if (page != NULL) {
+        //如果该页头管理的空闲页数大于n，将剩余的空闲页的第一页加入到list中
+        if(page->property > n){
+            struct Page* left_page = page + n;
+            SetPageProperty(left_page);
+            left_page->property = page->property - n;
+            list_add_after(&(page->page_link), &(left_page->page_link));
+        }
         list_del(&(page->page_link));
-        if (page->property > n) {
-            struct Page *p = page + n;
-            p->property = page->property - n;
-            list_add(&free_list, &(p->page_link));
-    }
         nr_free -= n;
         ClearPageProperty(page);
+        
     }
     return page;
 }
@@ -150,32 +153,47 @@ default_alloc_pages(size_t n) {
 static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
-    struct Page *p = base;
-    for (; p != base + n; p ++) {
-        assert(!PageReserved(p) && !PageProperty(p));
-        p->flags = 0;
-        set_page_ref(p, 0);
+    struct Page *p_iter;
+
+    //检查这些页是否都可以被分配，并重新设置flag
+    for(p_iter = base;p_iter != base+n;p_iter++){
+        assert(!PageReserved(p_iter) && !PageProperty(p_iter));
+        set_page_ref(p_iter, 0);
+        p_iter->flags = 0;
     }
+
     base->property = n;
     SetPageProperty(base);
-    list_entry_t *le = list_next(&free_list);
-    while (le != &free_list) {
-        p = le2page(le, page_link);
-        le = list_next(le);
-        if (base + base->property == p) {
-            base->property += p->property;
-            ClearPageProperty(p);
-            list_del(&(p->page_link));
+
+    list_entry_t* l_iter = list_next(&free_list);
+    while(l_iter != &(free_list)){
+        p_iter = le2page(l_iter, page_link);
+        if (base + base->property == p_iter) {
+            base->property += p_iter->property;
+            ClearPageProperty(p_iter);
+            list_del(&(p_iter->page_link));
         }
-        else if (p + p->property == base) {
-            p->property += base->property;
+        else if (p_iter + p_iter->property == base) {
+            p_iter->property += base->property;
             ClearPageProperty(base);
-            base = p;
-            list_del(&(p->page_link));
+            base = p_iter;
+            list_del(&(p_iter->page_link));
         }
+        l_iter = list_next(l_iter);
     }
+    
+    l_iter = list_next(&free_list);
+    while(l_iter != &free_list){
+        p_iter = le2page(l_iter, page_link);
+        if(p_iter >= base + base->property){
+            assert(p_iter != base + base->property);
+            // list_add_before(l_iter, &(base->page_link));
+            break;
+        }
+        l_iter = list_next(l_iter);
+    }
+    list_add_before(l_iter, &(base->page_link));
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
 }
 
 static size_t
@@ -187,7 +205,8 @@ static void
 basic_check(void) {
     struct Page *p0, *p1, *p2;
     p0 = p1 = p2 = NULL;
-    assert((p0 = alloc_page()) != NULL);
+    assert((p0 = 
+    alloc_page()) != NULL);
     assert((p1 = alloc_page()) != NULL);
     assert((p2 = alloc_page()) != NULL);
 
