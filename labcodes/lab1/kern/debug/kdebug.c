@@ -310,7 +310,7 @@ print_stackframe(void) {
         cprintf("args:0x%08x 0x%08x 0x%08x 0x%08x", first_parameter[0], first_parameter[1], first_parameter[2], first_parameter[3]); //打印出四个参数值
         cprintf("\n");
         print_debuginfo(t_eip-1);
-        t_eip = *((uint32_t*)(t_ebp + 4));                        // 将eip寄存器的值设置为返回地址，也就是下一条指令的地址处，位置在ebp+4
+        t_eip = *((uint32_t*)(t_ebp + 4));                        // 将eip寄存器的值设置为返回地址，也就是上一个函数的地址处，位置在ebp+4
         t_ebp = *((uint32_t*)t_ebp);
     }
 }

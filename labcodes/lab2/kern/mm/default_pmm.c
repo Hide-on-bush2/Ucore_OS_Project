@@ -107,11 +107,13 @@ default_init(void) {
 static void
 default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
-    struct Page *p = base;
-    for (; p != base + n; p ++) {
-        assert(PageReserved(p));
-        p->flags = p->property = 0;
-        set_page_ref(p, 0);
+    // struct Page *p = base;
+    for (int i = 0; i < n; i++) {
+        struct Page* tmp = base + i;
+        assert(PageReserved(tmp));
+        (tmp)->flags = 0;
+        (tmp)->property = 0;
+        set_page_ref(tmp, 0);
     }
     base->property = n;
     SetPageProperty(base);
@@ -125,29 +127,26 @@ default_alloc_pages(size_t n) {
     if (n > nr_free) {
         return NULL;
     }
-    struct Page *page = NULL;
-    list_entry_t *le = &free_list;
-    while ((le = list_next(le)) != &free_list) {
-        struct Page *p = le2page(le, page_link);
-        if (p->property >= n) {
-            page = p;
-            break;
-        }
+    struct Page *p = NULL;
+    list_entry_t *node = &free_list;
+
+    while (((node = list_next(node)) != &free_list) && (le2page(node, page_link)->property < n)) {}
+    if(node == &free_list){
+        return NULL;
     }
-    if (page != NULL) {
-        //如果该页头管理的空闲页数大于n，将剩余的空闲页的第一页加入到list中
-        if(page->property > n){
-            struct Page* left_page = page + n;
-            SetPageProperty(left_page);
-            left_page->property = page->property - n;
-            list_add_after(&(page->page_link), &(left_page->page_link));
-        }
-        list_del(&(page->page_link));
-        nr_free -= n;
-        ClearPageProperty(page);
-        
+    p = le2page(node, page_link);
+    //如果该页头管理的空闲页数大于n，将剩余的空闲页的第一页加入到list中
+    if(p->property > n){
+        struct Page* left_page = p + n;
+        SetPageProperty(left_page);
+        left_page->property = p->property - n;
+        list_add_after(&(p->page_link), &(left_page->page_link));
     }
-    return page;
+    list_del(&(p->page_link));
+    nr_free -= n;
+    ClearPageProperty(p);
+
+    return p;
 }
 
 static void
@@ -155,11 +154,10 @@ default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
     struct Page *p_iter;
 
-    //检查这些页是否都可以被分配，并重新设置flag
-    for(p_iter = base;p_iter != base+n;p_iter++){
-        assert(!PageReserved(p_iter) && !PageProperty(p_iter));
-        set_page_ref(p_iter, 0);
-        p_iter->flags = 0;
+    for(int i = 0;i < n;i++){
+        assert(!PageReserved(base+i) && !PageProperty(base+i));
+        set_page_ref(base+i, 0);
+        (base+i)->flags = 0;
     }
 
     base->property = n;
@@ -168,16 +166,22 @@ default_free_pages(struct Page *base, size_t n) {
     list_entry_t* l_iter = list_next(&free_list);
     while(l_iter != &(free_list)){
         p_iter = le2page(l_iter, page_link);
-        if (base + base->property == p_iter) {
-            base->property += p_iter->property;
-            ClearPageProperty(p_iter);
-            list_del(&(p_iter->page_link));
-        }
-        else if (p_iter + p_iter->property == base) {
-            p_iter->property += base->property;
-            ClearPageProperty(base);
-            base = p_iter;
-            list_del(&(p_iter->page_link));
+        if(p_iter > base){
+            if (base + n == p_iter) {
+                base->property += p_iter->property;
+                ClearPageProperty(p_iter);
+                p_iter->property = 0; 
+                list_del(&(p_iter->page_link));
+            }
+            struct Page* pre = le2page(list_prev(l_iter), page_link);
+            if((list_prev(l_iter) != &free_list) && (pre + pre->property == base)){
+                pre->property += base->property;
+                ClearPageProperty(base);
+                base->property = 0;
+                base = pre;
+                list_del(&(pre->page_link));
+            }
+            break;
         }
         l_iter = list_next(l_iter);
     }
@@ -187,7 +191,6 @@ default_free_pages(struct Page *base, size_t n) {
         p_iter = le2page(l_iter, page_link);
         if(p_iter >= base + base->property){
             assert(p_iter != base + base->property);
-            // list_add_before(l_iter, &(base->page_link));
             break;
         }
         l_iter = list_next(l_iter);

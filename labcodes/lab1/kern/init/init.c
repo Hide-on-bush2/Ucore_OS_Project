@@ -83,26 +83,25 @@ lab1_print_cur_status(void) {
 
 static void
 lab1_switch_to_user(void) {
-    //LAB1 CHALLENGE 1 : TODO   
-    asm volatile(
-        "sub $0x8, %%esp \n"
-        "int %0 \n"
-        "movl %%ebp, %%esp"
+    asm volatile (
+        "subl $0x08, %%esp\n"
+        "int  %[ker2usr]\n"
+        "movl %%ebp, %%esp\n"
         :
-        : "i"(T_SWITCH_TOU)
+        : [ker2usr]"N"(T_SWITCH_TOU)
+        : "%eax", "%esp", "memory", "cc"
     );
 }
 
 static void
 lab1_switch_to_kernel(void) {
-    //LAB1 CHALLENGE 1 :  TODO
-    //i限制符表示立即正型操作数
     asm volatile (
-	    "int %0 \n"
-	    "movl %%ebp, %%esp \n"
-	    : 
-	    : "i"(T_SWITCH_TOK)
-	);
+        "int  %[usr2ker]\n"
+        "popl %%esp\n"
+        :
+        : [usr2ker]"N"(T_SWITCH_TOK)
+        : "%eax", "%esp", "memory", "cc"
+    );
 }
 
 static void

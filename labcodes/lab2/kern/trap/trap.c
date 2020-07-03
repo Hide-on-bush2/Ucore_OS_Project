@@ -173,34 +173,16 @@ trap_dispatch(struct trapframe *tf) {
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
-        if(tf->tf_cs != USER_CS){
-            //创建一个trapframe来保存进行中断处理的信息
-            struct trapframe usr2ker;
-            usr2ker = *tf;
-            usr2ker.tf_cs = USER_CS;
-            usr2ker.tf_ds = usr2ker.tf_es = usr2ker.tf_ss = USER_DS;
-            usr2ker.tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8;
-
-            //修改IO权限位
-            usr2ker.tf_eflags |= FL_IOPL_MASK;
-
-            //压入栈中
-            *((uint32_t*)tf - 1) = (uint32_t)&usr2ker;
-
-        }
+        if ((tf->tf_cs & 3) == 3) return;
+        tf->tf_ds = tf->tf_es = tf->tf_fs = tf->tf_gs = tf->tf_ss = USER_DS;
+        tf->tf_cs = USER_CS;
+        tf->tf_eflags |= FL_IOPL_3;
         break;
     case T_SWITCH_TOK:
-        if(tf->tf_cs != KERNEL_CS){
-            tf->tf_cs = KERNEL_CS;
-            tf->tf_ds = tf->tf_es = KERNEL_DS;
-            tf->tf_eflags &= ~FL_IOPL_MASK;
-
-            //下面两步是将设置好寄存器值的trapframe压栈，进行中断处理程序
-            struct trapframe* ker2usr = (struct trapframe*)(tf->tf_esp - (sizeof(struct trapframe) - 8));
-            memmove(ker2usr, tf, sizeof(struct trapframe) - 8);
-            *((uint32_t*)tf - 1) = (uint32_t)ker2usr;
-
-        }
+        if ((tf->tf_cs & 3) == 0) return;
+        tf->tf_ds = tf->tf_es = tf->tf_fs = tf->tf_gs = tf->tf_ss = KERNEL_DS;
+        tf->tf_cs = KERNEL_CS;
+        tf->tf_eflags &= ~FL_IOPL_3;
         // panic("T_SWITCH_** ??\n");
         break;
     case IRQ_OFFSET + IRQ_IDE1:
