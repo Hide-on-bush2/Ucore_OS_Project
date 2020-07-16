@@ -102,6 +102,18 @@ alloc_proc(void) {
      *       uint32_t flags;                             // Process flag
      *       char name[PROC_NAME_LEN + 1];               // Process name
      */
+        proc->state = PROC_UNINIT;                          //进程状态为“未初始化的”
+        proc->pid = -1;                                     //进程号是从0开始的，因此设置为-1代表还没有初始化
+        proc->runs = 0;                                     //时间片为0
+        proc->kstack = 0;                                   //进程所使用的栈地址，每一个进程都有一个独立的栈，设置为0代表还没初始化
+        proc->need_resched = NULL;                          //还没初始化因此无法被调度
+        proc->parent = NULL;                                //进程的父进程
+        proc->mm = NULL;                                    //进程所占用的虚拟内存
+        memset(&proc->context, 0, sizeof(struct context));  //进程的上下文
+        proc->tf = NULL;                                    //进程的中断帧
+        proc->cr3 = boot_cr3;                               //将页目录表的地址设置为内核页目录表的基址
+        proc->flags = 0;                                    //进程的标志位
+        memset(&proc->name, 0, PROC_NAME_LEN);              //进程的名称
     }
     return proc;
 }
@@ -290,12 +302,29 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
      */
 
     //    1. call alloc_proc to allocate a proc_struct
+    proc = alloc_proc();
+    if(proc == NULL){
+        goto fork_out;
+    }
     //    2. call setup_kstack to allocate a kernel stack for child process
+    if(setup_kstack(proc) != 0){
+        goto bad_fork_cleanup_kstack;
+    }
     //    3. call copy_mm to dup OR share mm according clone_flag
+    if(copy_mm(clone_flags, proc) != 0){
+        goto bad_fork_cleanup_proc;
+    }
     //    4. call copy_thread to setup tf & context in proc_struct
+    copy_thread(proc, stack, tf);
+    proc->pid = get_pid();
+    hash_proc(proc);
+    nr_process++;
     //    5. insert proc_struct into hash_list && proc_list
+    list_add(&proc_list, &proc->list_link);
     //    6. call wakeup_proc to make the new child process RUNNABLE
+    wakeup_proc(proc);
     //    7. set ret vaule using child proc's pid
+    ret = proc->pid;
 fork_out:
     return ret;
 
